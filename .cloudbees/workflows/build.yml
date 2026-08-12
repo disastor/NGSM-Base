@@ -1,14 +1,17 @@
 # build.yml — NGSM-Base component build workflow.
 #
-# Matches the confirmed real pattern from taskflow-backend's build.yml:
-# register-build-artifacts@main (plural, @main not a version tag) with
-# a JSON artifact-metadata array, and a self-assigned artifact-id
-# rather than one captured from the action's own output.
+# Registration action confirmed against taskflow-backend's real
+# build.yml: register-build-artifacts@main (plural, @main not a
+# version tag) with a JSON artifact-metadata array, self-assigned
+# artifact-id.
 #
-# Deliberate divergence from taskflow: keeping an explicit `version`
-# input rather than using cloudbees.version alone, since HPE's real
-# products carry their own version numbers (matches release-manifest.yaml)
-# independent of which CI run built them.
+# NOTE: dropped the workflow_call trigger that was here earlier -
+# nothing in this architecture actually calls build.yml as a
+# sub-workflow (deployer.yaml only calls each component's deploy.yaml),
+# and having both workflow_dispatch + workflow_call on one workflow
+# broke `inputs` binding at runtime ("inputs is undefined") even
+# though it validated fine statically. workflow_dispatch alone (same
+# as our proven ngsm-release.yml) resolves it.
 
 apiVersion: automation.cloudbees.io/v1alpha1
 kind: workflow
@@ -21,19 +24,6 @@ on:
         type: string
         default: 4.2.1
         description: Version to build and register
-  workflow_call:
-    inputs:
-      version:
-        type: string
-        default: 4.2.1
-    outputs:
-      artifact-id:
-        value: ${{ jobs.build.outputs.artifact-id }}
-      version:
-        value: ${{ jobs.build.outputs.version }}
-  push:
-    branches:
-      - main
 
 jobs:
   build:
