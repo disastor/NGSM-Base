@@ -1,0 +1,51 @@
+# deploy.yaml — NGSM-Base component deployer.
+#
+# Matches the confirmed real pattern from taskflow-backend's deploy.yml:
+# no job-level `environment:` field, target-environment passed
+# explicitly to register-deployed-artifact, and a per-component
+# evidence item published alongside the release-level one.
+
+apiVersion: automation.cloudbees.io/v1alpha1
+kind: workflow
+name: deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+      artifact-id:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+
+jobs:
+  deploy:
+    steps:
+      - name: Deploy NGSM-Base via login-node gateway (simulated)
+        uses: docker://bash:5.2
+        shell: sh
+        run: |
+          echo "Deploying ngsm-base:${{ inputs.version }} to ${{ inputs.environment }}"
+          echo "  -> shard dispatched via login-node gateway"
+          sleep 1
+          echo "  <- aggregate received: install OK"
+
+      - name: Publish evidence
+        uses: cloudbees-io/publish-evidence-item@v1
+        with:
+          content: |-
+            ## Deployed environment
+            **Component:** ngsm-base
+            **Version:** ${{ inputs.version }}
+            **Environment:** ${{ inputs.environment }}
+          format: MARKDOWN
+
+      - name: Register deployed artifact
+        uses: cloudbees-io/register-deployed-artifact@v2
+        with:
+          artifact-id: ${{ inputs.artifact-id }}
+          target-environment: ${{ inputs.environment }}
