@@ -1,0 +1,64 @@
+# build.yml — NGSM-Base component build workflow.
+#
+# Matches the confirmed real pattern from taskflow-backend's build.yml:
+# register-build-artifacts@main (plural, @main not a version tag) with
+# a JSON artifact-metadata array, and a self-assigned artifact-id
+# rather than one captured from the action's own output.
+#
+# Deliberate divergence from taskflow: keeping an explicit `version`
+# input rather than using cloudbees.version alone, since HPE's real
+# products carry their own version numbers (matches release-manifest.yaml)
+# independent of which CI run built them.
+
+apiVersion: automation.cloudbees.io/v1alpha1
+kind: workflow
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        type: string
+        default: 4.2.1
+        description: Version to build and register
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: 4.2.1
+    outputs:
+      artifact-id:
+        value: ${{ jobs.build.outputs.artifact-id }}
+      version:
+        value: ${{ jobs.build.outputs.version }}
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    outputs:
+      artifact-id: ngsm-base-artifact-${{ cloudbees.version }}
+      version: ${{ inputs.version }}
+    steps:
+      - name: Check out repository
+        uses: cloudbees-io/checkout@v2
+
+      - name: Build NGSM-Base
+        uses: docker://bash:5.2
+        shell: sh
+        run: |
+          bash build.sh "${{ inputs.version }}"
+
+      - name: Register build artifact
+        uses: cloudbees-io/register-build-artifacts@main
+        with:
+          artifact-metadata: |
+            [
+              {
+                "name": "ngsm-base",
+                "version": "${{ inputs.version }}",
+                "url": "https://artifactory.example.internal/hpe-releases/ngsm-base/${{ inputs.version }}/ngsm-base.tar.gz",
+                "type": "generic"
+              }
+            ]
