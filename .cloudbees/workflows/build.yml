@@ -1,0 +1,97 @@
+# build.yml — NGSM-Base component build workflow.
+#
+# Registration action confirmed against taskflow-backend's real
+# build.yml: register-build-artifacts@main (plural, @main not a
+# version tag) with a JSON artifact-metadata array, self-assigned
+# artifact-id.
+#
+# NOTE: dropped the workflow_call trigger that was here earlier -
+# nothing in this architecture actually calls build.yml as a
+# sub-workflow (deployer.yaml only calls each component's deploy.yaml),
+# and having both workflow_dispatch + workflow_call on one workflow
+# broke `inputs` binding at runtime ("inputs is undefined") even
+# though it validated fine statically. workflow_dispatch alone (same
+# as our proven ngsm-release.yml) resolves it.
+#
+# PATH A - one component, multiple artifacts (additive, not yet wired
+# into deployer.yaml): this build now also produces three image-type
+# variants (RHEL/Rocky x86_64/aarch64, matching TriggerDB's real Image
+# Types Management combinatorics) and registers all of them alongside
+# the original "ngsm-base" artifact in the SAME register-build-artifacts
+# call. The original "ngsm-base" entry is untouched, so deployer.yaml
+# and release-wf.yml need zero changes and keep working exactly as
+# before - the three variants are additional tracked history only,
+# not yet selected by anything downstream. That's Path B, deliberately
+# deferred (needs deployer.yaml to gain per-environment variant
+# selection logic - a real design decision, not a syntax change).
+
+apiVersion: automation.cloudbees.io/v1alpha1
+kind: workflow
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        type: string
+        default: 4.2.1
+        description: Version to build and register
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    outputs:
+      artifact-id: ngsm-base-artifact-${{ cloudbees.version }}
+      version: ${{ inputs.version }}
+    steps:
+      - name: Check out repository
+        uses: cloudbees-io/checkout@v2
+
+      - name: Build NGSM-Base
+        uses: docker://bash:5.2
+        shell: sh
+        run: |
+          bash build.sh "${{ inputs.version }}"
+
+      - name: Build NGSM-Base image-type variants (mocked)
+        uses: docker://bash:5.2
+        shell: sh
+        run: |
+          echo "Building NGSM-Base ${{ inputs.version }} for additional image-type variants:"
+          echo "  -> RHEL 9.7  / x86_64"
+          echo "  -> RHEL 9.7  / aarch64"
+          echo "  -> Rocky 9.7 / x86_64"
+
+      - name: Register build artifact
+        uses: cloudbees-io/register-build-artifacts@main
+        with:
+          artifact-metadata: |
+            [
+              {
+                "name": "ngsm-base",
+                "version": "${{ inputs.version }}",
+                "url": "https://artifactory.example.internal/hpe-releases/ngsm-base/${{ inputs.version }}/ngsm-base.tar.gz",
+                "type": "generic"
+              },
+              {
+                "name": "ngsm-base-rhel97-x86_64",
+                "version": "${{ inputs.version }}",
+                "url": "https://artifactory.example.internal/hpe-releases/ngsm-base/${{ inputs.version }}/ngsm-base-rhel97-x86_64.rpm",
+                "type": "generic"
+              },
+              {
+                "name": "ngsm-base-rhel97-aarch64",
+                "version": "${{ inputs.version }}",
+                "url": "https://artifactory.example.internal/hpe-releases/ngsm-base/${{ inputs.version }}/ngsm-base-rhel97-aarch64.rpm",
+                "type": "generic"
+              },
+              {
+                "name": "ngsm-base-rocky97-x86_64",
+                "version": "${{ inputs.version }}",
+                "url": "https://artifactory.example.internal/hpe-releases/ngsm-base/${{ inputs.version }}/ngsm-base-rocky97-x86_64.rpm",
+                "type": "generic"
+              }
+            ]
+
